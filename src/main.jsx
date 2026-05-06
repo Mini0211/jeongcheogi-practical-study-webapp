@@ -179,6 +179,37 @@ function NoteBlock({ note }) {
     ? <p key={idx}>{line}</p>
     : <div key={idx} className="note-gap" />)}</div></div>;
 }
+function ExplanationBlock({ answer, text, loading, error }) {
+  if (loading) return <div className="explanation-block"><p>불러오는 중...</p></div>;
+  if (error) return <div className="explanation-block"><p>{error}</p></div>;
+  const lines = (text || '해설이 아직 없습니다.').split('\n').map(line => line.trim()).filter(Boolean);
+  const sections = [];
+  let current = { title: '해설', lines: [] };
+  const push = () => { if (current.lines.length) sections.push(current); };
+  for (const line of lines) {
+    const match = line.match(/^(핵심|풀이|정답|주의):\s*(.*)$/);
+    if (match) {
+      push();
+      current = { title: match[1], lines: match[2] ? [match[2]] : [] };
+    } else {
+      current.lines.push(line);
+    }
+  }
+  push();
+  return <div className="explanation-block">
+    {answer && <div className="answer-card"><span>정답</span><strong>{answer}</strong></div>}
+    {sections.map((section, idx) => <section className={`ex-section ex-${section.title}`} key={`${section.title}-${idx}`}>
+      <h4>{section.title}</h4>
+      <div className="ex-lines">{section.lines.map((line, lineIdx) => {
+        const step = line.match(/^(\d+)\.\s*(.*)$/);
+        return step
+          ? <div className="ex-step" key={lineIdx}><span>{step[1]}</span><p>{step[2]}</p></div>
+          : <p className="ex-text" key={lineIdx}>{line}</p>;
+      })}</div>
+    </section>)}
+  </div>;
+}
+
 function QuestionBody({ question }) {
   const text = question.prompt_text || question.prompt;
   return <>
@@ -355,7 +386,7 @@ function Dashboard({ token, user, onLogout }) {
             <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
             <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button><button onClick={showExplanation}>해설</button></div>
             {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b></div>}
-            {explanation && <div className="explain-box"><b>해설</b>{explanation.loading ? <p>불러오는 중...</p> : explanation.error ? <p>{explanation.error}</p> : <><p><b>정답:</b> {explanation.answer}</p><p>{explanation.explanation || '해설이 아직 없습니다.'}</p></>}</div>}
+            {explanation && <div className="explain-box"><b>해설</b><ExplanationBlock answer={explanation.answer} text={explanation.explanation} loading={explanation.loading} error={explanation.error} /></div>}
           </> : <p>선택한 조건에 해당하는 문제가 없습니다.</p>}
         </div>
 
@@ -376,7 +407,7 @@ function Dashboard({ token, user, onLogout }) {
           <p className="meta">{idx + 1}번 · {examLabel(q)} · {TYPE_LABELS[q.type] || q.type} · {q.category}</p>
           <QuestionBody question={q} />
           <textarea disabled={!!examResults} value={examAnswers[q.id] || ''} onChange={e => setExamAnswer(q.id, e.target.value)} placeholder="답안을 입력하세요" />
-          {r && <div className={r.correct ? 'result good' : 'result bad'}><b>{r.feedback}</b><p><b>내 답:</b> {r.userAnswer || '(미답)'}</p>{r.explanation && <p>{r.explanation}</p>}</div>}
+          {r && <div className={r.correct ? 'result good' : 'result bad'}><b>{r.feedback}</b><p><b>내 답:</b> {r.userAnswer || '(미답)'}</p>{r.explanation && <ExplanationBlock text={r.explanation} />}</div>}
         </article>;
       })}</div>
     </section>}
