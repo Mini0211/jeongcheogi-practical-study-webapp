@@ -315,6 +315,10 @@ function Dashboard({ token, user, onLogout }) {
 
   async function changeSet(value) {
     setSelectedSet(value);
+    if (value === 'random-20') {
+      await startRandomExam();
+      return;
+    }
     setExamSource('set');
     try { await load(selectedType, value); }
     catch (e) { setResult({ correct: false, feedback: '문제 세트 조회 오류: ' + e.message }); }
@@ -335,6 +339,7 @@ function Dashboard({ token, user, onLogout }) {
       setExamAnswers({});
       setExamResults(null);
       setExamSource('random');
+      setSelectedSet('random-20');
       setSelectedType('');
       setExamMsg(`랜덤 모의고사 20문항을 생성했습니다. 유형 구성: ${typeSummary(picked)}`);
     } catch (e) {
@@ -425,9 +430,10 @@ function Dashboard({ token, user, onLogout }) {
         <button className={viewMode === 'exam' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('exam')}>시험 모드</button>
       </div>
       <label>문제 세트</label>
-      <select value={selectedSet} onChange={e => changeSet(e.target.value)} disabled={examSource === 'random'}>
+      <select value={selectedSet} onChange={e => changeSet(e.target.value)}>
         <option value="">전체 문제</option>
         {questionSets.map(set => <option key={set.value} value={set.value}>{set.label} ({set.question_count}문항)</option>)}
+        <option value="random-20">랜덤 모의고사 20문항</option>
       </select>
     </section>
 
@@ -460,7 +466,6 @@ function Dashboard({ token, user, onLogout }) {
 
     {viewMode === 'exam' && <section className="card exam-card">
       <div className="exam-head"><div><h2>시험 모드</h2><p className="meta">정답과 해설은 제출 전까지 숨깁니다. {examSource === 'random' ? '랜덤 모의고사' : '현재 선택 세트'} 기준 {questions.length}문항입니다.</p></div><button className="primary" onClick={submitExam}>제출하기</button></div>
-      <div className="exam-tools"><button onClick={startRandomExam}>랜덤 모의고사 20문항</button>{examSource === 'random' && <button onClick={() => changeSet(selectedSet)}>회차별 시험으로 돌아가기</button>}</div>
       {examMsg && <p className="msg">{examMsg}</p>}
       {examResults && <div className="result good"><b>결과: {examCorrect}/{examResults.length}문항 정답 · {examScore}점</b></div>}
       <div className="exam-list">{questions.map((q, idx) => {
