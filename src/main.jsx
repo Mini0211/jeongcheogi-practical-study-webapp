@@ -165,6 +165,44 @@ const QUESTION_TYPES = [
   { value: 'keyword', label: '키워드형' },
 ];
 const TYPE_LABELS = Object.fromEntries(QUESTION_TYPES.map(t => [t.value, t.label]));
+
+function shuffleItems(items) {
+  return [...items].sort(() => Math.random() - 0.5);
+}
+function buildRandomExam(allQuestions, count = 20) {
+  const byType = allQuestions.reduce((acc, q) => {
+    (acc[q.type] ||= []).push(q);
+    return acc;
+  }, {});
+  const quotas = { code_output: 7, blank: 5, keyword: 4, short_answer: 3, sql: 1 };
+  const picked = [];
+  const pickedIds = new Set();
+  for (const [type, quota] of Object.entries(quotas)) {
+    for (const q of shuffleItems(byType[type] || []).slice(0, quota)) {
+      picked.push(q);
+      pickedIds.add(q.id);
+    }
+  }
+  if (picked.length < count) {
+    for (const q of shuffleItems(allQuestions)) {
+      if (picked.length >= count) break;
+      if (!pickedIds.has(q.id)) {
+        picked.push(q);
+        pickedIds.add(q.id);
+      }
+    }
+  }
+  return shuffleItems(picked).slice(0, count);
+}
+function typeSummary(items) {
+  const counts = items.reduce((acc, q) => {
+    const label = TYPE_LABELS[q.type] || q.type;
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts).map(([label, count]) => `${label} ${count}`).join(' · ');
+}
+
 function examLabel(q) {
   return q?.exam_year && q?.exam_round ? `${q.exam_year}년 ${q.exam_round}회${q.original_no ? ` #${q.original_no}` : ""}` : '연습문제';
 }
@@ -241,6 +279,7 @@ function Dashboard({ token, user, onLogout }) {
   const [examAnswers, setExamAnswers] = useState({});
   const [examResults, setExamResults] = useState(null);
   const [examMsg, setExamMsg] = useState('');
+  const [examSource, setExamSource] = useState('set');
   const categories = useMemo(() => [...new Set(questions.map(q => q.category))], [questions]);
 
   function applySetParams(params, setValue = selectedSet) {
@@ -276,14 +315,33 @@ function Dashboard({ token, user, onLogout }) {
 
   async function changeSet(value) {
     setSelectedSet(value);
+    setExamSource('set');
     try { await load(selectedType, value); }
     catch (e) { setResult({ correct: false, feedback: '문제 세트 조회 오류: ' + e.message }); }
   }
   async function changeType(type) {
     setSelectedType(type);
+    setExamSource('set');
     try { await load(type, selectedSet); }
     catch (e) { setResult({ correct: false, feedback: '유형 조회 오류: ' + e.message }); }
   }
+  async function startRandomExam() {
+    try {
+      const data = await api('/questions?limit=200', {}, token);
+      const pool = data.questions || [];
+      const picked = buildRandomExam(pool, 20);
+      setQuestions(picked);
+      setCurrent(picked[0] || null);
+      setExamAnswers({});
+      setExamResults(null);
+      setExamSource('random');
+      setSelectedType('');
+      setExamMsg(`랜덤 모의고사 20문항을 생성했습니다. 유형 구성: ${typeSummary(picked)}`);
+    } catch (e) {
+      setExamMsg('랜덤 모의고사 생성 오류: ' + e.message);
+    }
+  }
+
   function selectQuestion(q) {
     setCurrent(q);
     setResult(null);
@@ -367,7 +425,7 @@ function Dashboard({ token, user, onLogout }) {
         <button className={viewMode === 'exam' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('exam')}>시험 모드</button>
       </div>
       <label>문제 세트</label>
-      <select value={selectedSet} onChange={e => changeSet(e.target.value)}>
+      <select value={selectedSet} onChange={e => changeSet(e.target.value)} disabled={examSource === 'random'}>
         <option value="">전체 문제</option>
         {questionSets.map(set => <option key={set.value} value={set.value}>{set.label} ({set.question_count}문항)</option>)}
       </select>
@@ -401,7 +459,8 @@ function Dashboard({ token, user, onLogout }) {
     </>}
 
     {viewMode === 'exam' && <section className="card exam-card">
-      <div className="exam-head"><div><h2>시험 모드</h2><p className="meta">정답과 해설은 제출 전까지 숨깁니다. 현재 선택 세트 기준 {questions.length}문항입니다.</p></div><button className="primary" onClick={submitExam}>제출하기</button></div>
+      <div className="exam-head"><div><h2>시험 모드</h2><p className="meta">정답과 해설은 제출 전까지 숨깁니다. {examSource === 'random' ? '랜덤 모의고사' : '현재 선택 세트'} 기준 {questions.length}문항입니다.</p></div><button className="primary" onClick={submitExam}>제출하기</button></div>
+      <div className="exam-tools"><button onClick={startRandomExam}>랜덤 모의고사 20문항</button>{examSource === 'random' && <button onClick={() => changeSet(selectedSet)}>회차별 시험으로 돌아가기</button>}</div>
       {examMsg && <p className="msg">{examMsg}</p>}
       {examResults && <div className="result good"><b>결과: {examCorrect}/{examResults.length}문항 정답 · {examScore}점</b></div>}
       <div className="exam-list">{questions.map((q, idx) => {
