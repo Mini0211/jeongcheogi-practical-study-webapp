@@ -31,42 +31,43 @@ function Auth({ onLogin }) {
   const [msg, setMsg] = useState('');
   async function submit(e) {
     e.preventDefault();
-    if (mode === 'register') {
-      setInviteCode('');
-      setInviteAttempts(0);
-      setInviteOpen(true);
-      setMsg('초대코드를 먼저 입력해주세요.');
-      return;
-    }
     setMsg('처리 중...');
     try {
-      const data = await api('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      const body = mode === 'register' ? { username, nickname, password, invite_code: inviteCode } : { username, password };
+      const data = await api(mode === 'register' ? '/auth/register' : '/auth/login', { method: 'POST', body: JSON.stringify(body) });
       localStorage.setItem('jcg_token', data.token);
       onLogin(data.token, data.user);
     } catch (err) { setMsg(err.message); }
   }
-  async function registerWithInvite() {
+  function openSignupInvite() {
+    setInviteCode('');
+    setInviteAttempts(0);
+    setInviteOpen(true);
+    setMsg('회원가입 초대코드를 먼저 확인해주세요.');
+  }
+  async function verifyInvite() {
     const code = inviteCode;
     if (!code) { setMsg('초대코드를 입력해주세요.'); return; }
     setMsg('초대코드 확인 중...');
     try {
-      const data = await api('/auth/register', { method: 'POST', body: JSON.stringify({ username, nickname, password, invite_code: code }) });
-      localStorage.setItem('jcg_token', data.token);
-      onLogin(data.token, data.user);
+      await api('/auth/verify-invite', { method: 'POST', body: JSON.stringify({ invite_code: code }) });
+      setInviteOpen(false);
+      setMode('register');
+      setMsg('초대코드 확인 완료. 회원가입 정보를 입력한 뒤 완료를 눌러주세요.');
     } catch (err) {
       const next = inviteAttempts + 1;
       setInviteAttempts(next);
       setInviteCode('');
       if (next >= 3) {
         setInviteOpen(false);
-        setMsg('초대코드 3회 오류입니다. 회원가입을 다시 눌러 재시도해주세요.');
+        setMsg('초대코드 3회 오류입니다. 처음이면 회원가입을 다시 눌러 재시도해주세요.');
       } else {
         setMsg(`초대코드가 맞지 않습니다. 남은 기회: ${3 - next}회`);
       }
     }
   }
-  function switchMode() {
-    setMode(mode === 'register' ? 'login' : 'register');
+  function switchToLogin() {
+    setMode('login');
     setInviteCode('');
     setInviteAttempts(0);
     setInviteOpen(false);
@@ -81,18 +82,20 @@ function Auth({ onLogin }) {
       {mode === 'register' && <><label>닉네임</label><input value={nickname} onChange={e => setNickname(e.target.value)} /></>}
       <label>비밀번호</label>
       <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" />
-      <button className="primary">{mode === 'register' ? '회원가입' : '로그인'}</button>
+      <button className="primary">{mode === 'register' ? '완료' : '로그인'}</button>
     </form>
-    <button className="link" onClick={switchMode}>{mode === 'register' ? '이미 계정이 있어요' : '처음이면 회원가입'}</button>
+    {mode === 'register'
+      ? <button className="link" onClick={switchToLogin}>이미 계정이 있어요</button>
+      : <button className="signup-link" onClick={openSignupInvite}>처음이면 회원가입</button>}
     {msg && <p className="msg">{msg}</p>}
     {inviteOpen && <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal card">
         <h2>회원가입 초대코드</h2>
-        <p>초대코드는 대소문자를 구분합니다. 최대 3회까지 입력할 수 있습니다.</p>
-        <input autoFocus value={inviteCode} onChange={e => setInviteCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); registerWithInvite(); } }} placeholder="초대코드 입력" />
+        <p>초대코드는 대소문자를 구분합니다. 코드 확인 후 회원가입 화면으로 넘어갑니다.</p>
+        <input autoFocus value={inviteCode} onChange={e => setInviteCode(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); verifyInvite(); } }} placeholder="초대코드 입력" />
         <p className="meta">남은 기회: {3 - inviteAttempts}회</p>
         <div className="actions">
-          <button className="primary" onClick={(e) => { e.preventDefault(); registerWithInvite(); }}>확인 후 회원가입</button>
+          <button className="primary" onClick={(e) => { e.preventDefault(); verifyInvite(); }}>코드 확인</button>
           <button onClick={(e) => { e.preventDefault(); setInviteOpen(false); setInviteCode(''); setInviteAttempts(0); setMsg('초대코드 입력이 취소되었습니다.'); }}>취소</button>
         </div>
       </div>
