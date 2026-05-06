@@ -30,7 +30,12 @@ function Auth({ onLogin }) {
     e.preventDefault();
     setMsg('처리 중...');
     try {
-      const body = mode === 'register' ? { username, nickname, password } : { username, password };
+      let body = { username, password };
+      if (mode === 'register') {
+        const invite_code = window.prompt('회원가입 초대코드를 입력해주세요. 대소문자를 구분합니다.');
+        if (!invite_code) { setMsg('초대코드 입력이 취소되었습니다.'); return; }
+        body = { username, nickname, password, invite_code };
+      }
       const data = await api(mode === 'register' ? '/auth/register' : '/auth/login', { method: 'POST', body: JSON.stringify(body) });
       localStorage.setItem('jcg_token', data.token);
       onLogin(data.token, data.user);
