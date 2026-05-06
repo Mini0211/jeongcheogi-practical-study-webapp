@@ -265,6 +265,7 @@ function QuestionBody({ question }) {
 
 function Dashboard({ token, user, onLogout }) {
   const [viewMode, setViewMode] = useState('study');
+  const [menuOpen, setMenuOpen] = useState(false);
   const [health, setHealth] = useState(null);
   const [me, setMe] = useState(null);
   const [questionSets, setQuestionSets] = useState([]);
@@ -404,88 +405,116 @@ function Dashboard({ token, user, onLogout }) {
     setMe(m); setWrong(w.wrong_notes || []);
   }
 
+  function navigate(view) {
+    setViewMode(view);
+    setMenuOpen(false);
+  }
+
+  const menuItems = [
+    { id: 'study', label: '학습모드', icon: '📚' },
+    { id: 'exam', label: '시험모드', icon: '📝' },
+    { id: 'wrong', label: '오답노트', icon: '📒' },
+  ];
+  const activeTitle = menuItems.find(item => item.id === viewMode)?.label || '학습모드';
+
   const examCorrect = examResults?.filter(r => r.correct).length || 0;
   const examScore = examResults ? Math.round((examCorrect / Math.max(examResults.length, 1)) * 100) : 0;
 
-  return <main className="wrap">
-    <header className="hero">
-      <div>
-        <p className="eyebrow">Jeongcheogi Practical Study</p>
-        <h1>정보처리기사 실기 공부앱</h1>
-      </div>
-      <button onClick={onLogout}>로그아웃</button>
-    </header>
+  return <main className="wrap app-shell">
+    <section className="app-content">
+      <header className="hero app-header">
+        <div>
+          <p className="eyebrow">Jeongcheogi Practical Study</p>
+          <h1>{activeTitle}</h1>
+          <p className="meta">정보처리기사 실기 공부앱</p>
+        </div>
+        <div className="header-actions">
+          <button className="menu-open" onClick={() => setMenuOpen(true)} aria-label="메뉴 열기">☰</button>
+          <button onClick={onLogout}>로그아웃</button>
+        </div>
+      </header>
 
-    <section className="grid stats">
-      <div className="card"><b>API</b><span>{health?.ok ? '정상' : '확인 중'}</span></div>
-      <div className="card"><b>문제 수</b><span>{health?.questions ?? '-'}</span></div>
-      <div className="card"><b>풀이</b><span>{me?.stats?.total ?? 0}회</span></div>
-      <div className="card"><b>정답</b><span>{me?.stats?.correct ?? 0}회</span></div>
-    </section>
+      <section className="grid stats">
+        <div className="card"><b>API</b><span>{health?.ok ? '정상' : '확인 중'}</span></div>
+        <div className="card"><b>문제 수</b><span>{health?.questions ?? '-'}</span></div>
+        <div className="card"><b>풀이</b><span>{me?.stats?.total ?? 0}회</span></div>
+        <div className="card"><b>정답</b><span>{me?.stats?.correct ?? 0}회</span></div>
+      </section>
 
-    <section className="card mode-card">
-      <div className="mode-tabs app-menu" aria-label="학습 메뉴">
-        <button className={viewMode === 'study' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('study')}>학습모드</button>
-        <button className={viewMode === 'exam' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('exam')}>시험모드</button>
-        <button className={viewMode === 'wrong' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('wrong')}>오답노트</button>
-      </div>
-      {viewMode !== 'wrong' && <>
+      {viewMode !== 'wrong' && <section className="card mode-card">
         <label>문제 세트</label>
         <select value={selectedSet} onChange={e => changeSet(e.target.value)}>
           <option value="">전체 문제</option>
           {questionSets.map(set => <option key={set.value} value={set.value}>{set.label} ({set.question_count}문항)</option>)}
           <option value="random-20">랜덤 모의고사 20문항</option>
         </select>
+      </section>}
+
+      {viewMode === 'study' && <>
+        <section className="card type-card">
+          <div className="type-head"><h2>문제 유형 선택</h2><p className="meta">선택한 유형의 문제만 불러옵니다.</p></div>
+          <div className="type-buttons">{QUESTION_TYPES.map(t => <button key={t.value || 'all'} className={selectedType === t.value ? 'type-btn active' : 'type-btn'} onClick={() => changeType(t.value)}>{t.label}</button>)}</div>
+        </section>
+
+        <section className="grid main-grid">
+          <div className="card">
+            <h2>문제 풀이</h2>
+            <div className="chips">{categories.map(c => <span className="chip" key={c}>{c}</span>)}</div>
+            {current ? <>
+              <p className="meta">{examLabel(current)} · #{current.id} · {current.category} · {TYPE_LABELS[current.type] || current.type} · {current.difficulty}</p>
+              <QuestionBody question={current} />
+              <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
+              <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button><button onClick={showExplanation}>해설</button></div>
+              {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b></div>}
+              {explanation && <div className="explain-box"><b>해설</b><ExplanationBlock answer={explanation.answer} text={explanation.explanation} loading={explanation.loading} error={explanation.error} /></div>}
+            </> : <p>선택한 조건에 해당하는 문제가 없습니다.</p>}
+          </div>
+
+          <div className="card">
+            <h2>문제 목록</h2>
+            <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => selectQuestion(q)}><b>{examLabel(q)}</b> · {TYPE_LABELS[q.type] || q.type} · {q.category}<br />{(q.prompt_text || q.prompt).slice(0, 38)}...</button></li>)}</ul>
+          </div>
+        </section>
       </>}
+
+      {viewMode === 'exam' && <section className="card exam-card">
+        <div className="exam-head"><div><h2>시험 모드</h2><p className="meta">정답과 해설은 제출 전까지 숨깁니다. {examSource === 'random' ? '랜덤 모의고사' : '현재 선택 세트'} 기준 {questions.length}문항입니다.</p></div><button className="primary" onClick={submitExam}>제출하기</button></div>
+        {examMsg && <p className="msg">{examMsg}</p>}
+        {examResults && <div className="result good"><b>결과: {examCorrect}/{examResults.length}문항 정답 · {examScore}점</b></div>}
+        <div className="exam-list">{questions.map((q, idx) => {
+          const r = examResults?.find(x => x.question.id === q.id);
+          return <article className="exam-question" key={q.id}>
+            <p className="meta">{idx + 1}번 · {examLabel(q)} · {TYPE_LABELS[q.type] || q.type} · {q.category}</p>
+            <QuestionBody question={q} />
+            <textarea disabled={!!examResults} value={examAnswers[q.id] || ''} onChange={e => setExamAnswer(q.id, e.target.value)} placeholder="답안을 입력하세요" />
+            {r && <div className={r.correct ? 'result good' : 'result bad'}><b>{r.feedback}</b><p><b>내 답:</b> {r.userAnswer || '(미답)'}</p>{r.explanation && <ExplanationBlock text={r.explanation} />}</div>}
+          </article>;
+        })}</div>
+      </section>}
+
+      {viewMode === 'wrong' && <section className="card wrong-card">
+        <h2>오답노트</h2>
+        <p className="meta">틀린 문제와 재복습할 항목을 모아봅니다.</p>
+        {wrong.length ? <ul className="wrong-list">{wrong.map(w => <li key={w.id}><b>{w.category}</b> {w.prompt}<small>{w.reason}</small></li>)}</ul> : <p>아직 오답이 없습니다.</p>}
+      </section>}
     </section>
 
-    {viewMode === 'study' && <>
-      <section className="card type-card">
-        <div className="type-head"><h2>문제 유형 선택</h2><p className="meta">선택한 유형의 문제만 불러옵니다.</p></div>
-        <div className="type-buttons">{QUESTION_TYPES.map(t => <button key={t.value || 'all'} className={selectedType === t.value ? 'type-btn active' : 'type-btn'} onClick={() => changeType(t.value)}>{t.label}</button>)}</div>
-      </section>
+    <aside className="side-menu">
+      <div className="menu-card card">
+        <div className="menu-title"><p className="eyebrow">Menu</p><p className="meta">{user?.nickname || '학습자'}님</p></div>
+        {menuItems.map(item => <button key={item.id} className={viewMode === item.id ? 'menu-item active' : 'menu-item'} onClick={() => navigate(item.id)}><span><span className="menu-icon">{item.icon}</span>{item.label}</span><span>›</span></button>)}
+        <button className="menu-item logout" onClick={onLogout}><span><span className="menu-icon">🚪</span>로그아웃</span><span>›</span></button>
+      </div>
+    </aside>
 
-      <section className="grid main-grid">
-        <div className="card">
-          <h2>문제 풀이</h2>
-          <div className="chips">{categories.map(c => <span className="chip" key={c}>{c}</span>)}</div>
-          {current ? <>
-            <p className="meta">{examLabel(current)} · #{current.id} · {current.category} · {TYPE_LABELS[current.type] || current.type} · {current.difficulty}</p>
-            <QuestionBody question={current} />
-            <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
-            <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button><button onClick={showExplanation}>해설</button></div>
-            {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b></div>}
-            {explanation && <div className="explain-box"><b>해설</b><ExplanationBlock answer={explanation.answer} text={explanation.explanation} loading={explanation.loading} error={explanation.error} /></div>}
-          </> : <p>선택한 조건에 해당하는 문제가 없습니다.</p>}
-        </div>
-
-        <div className="card">
-          <h2>문제 목록</h2>
-          <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => selectQuestion(q)}><b>{examLabel(q)}</b> · {TYPE_LABELS[q.type] || q.type} · {q.category}<br />{(q.prompt_text || q.prompt).slice(0, 38)}...</button></li>)}</ul>
-        </div>
-      </section>
-    </>}
-
-    {viewMode === 'exam' && <section className="card exam-card">
-      <div className="exam-head"><div><h2>시험 모드</h2><p className="meta">정답과 해설은 제출 전까지 숨깁니다. {examSource === 'random' ? '랜덤 모의고사' : '현재 선택 세트'} 기준 {questions.length}문항입니다.</p></div><button className="primary" onClick={submitExam}>제출하기</button></div>
-      {examMsg && <p className="msg">{examMsg}</p>}
-      {examResults && <div className="result good"><b>결과: {examCorrect}/{examResults.length}문항 정답 · {examScore}점</b></div>}
-      <div className="exam-list">{questions.map((q, idx) => {
-        const r = examResults?.find(x => x.question.id === q.id);
-        return <article className="exam-question" key={q.id}>
-          <p className="meta">{idx + 1}번 · {examLabel(q)} · {TYPE_LABELS[q.type] || q.type} · {q.category}</p>
-          <QuestionBody question={q} />
-          <textarea disabled={!!examResults} value={examAnswers[q.id] || ''} onChange={e => setExamAnswer(q.id, e.target.value)} placeholder="답안을 입력하세요" />
-          {r && <div className={r.correct ? 'result good' : 'result bad'}><b>{r.feedback}</b><p><b>내 답:</b> {r.userAnswer || '(미답)'}</p>{r.explanation && <ExplanationBlock text={r.explanation} />}</div>}
-        </article>;
-      })}</div>
-    </section>}
-
-    {viewMode === 'wrong' && <section className="card wrong-card">
-      <h2>오답노트</h2>
-      <p className="meta">틀린 문제와 재복습할 항목을 모아봅니다.</p>
-      {wrong.length ? <ul className="wrong-list">{wrong.map(w => <li key={w.id}><b>{w.category}</b> {w.prompt}<small>{w.reason}</small></li>)}</ul> : <p>아직 오답이 없습니다.</p>}
-    </section>}
+    {menuOpen && <div className="mobile-menu">
+      <button className="mobile-backdrop" aria-label="메뉴 닫기" onClick={() => setMenuOpen(false)} />
+      <nav className="mobile-drawer">
+        <div className="drawer-head"><div><p className="eyebrow">Menu</p><p className="meta">{user?.nickname || '학습자'}님</p></div><button onClick={() => setMenuOpen(false)}>×</button></div>
+        {menuItems.map(item => <button key={item.id} className={viewMode === item.id ? 'menu-item active' : 'menu-item'} onClick={() => navigate(item.id)}><span><span className="menu-icon">{item.icon}</span>{item.label}</span><span>›</span></button>)}
+        <button className="menu-item logout drawer-logout" onClick={onLogout}><span><span className="menu-icon">🚪</span>로그아웃</span><span>›</span></button>
+      </nav>
+    </div>}
   </main>;
 }
 
