@@ -172,11 +172,18 @@ function codeLangLabel(lang) {
   const labels = { c: 'C', java: 'Java', python: 'Python', sql: 'SQL' };
   return labels[lang] || 'Code';
 }
+function NoteBlock({ note }) {
+  if (!note) return null;
+  const lines = note.split('\n');
+  return <div className="input-note"><b>보기/조건</b><div className="note-lines">{lines.map((line, idx) => line.trim()
+    ? <p key={idx}>{line}</p>
+    : <div key={idx} className="note-gap" />)}</div></div>;
+}
 function QuestionBody({ question }) {
   const text = question.prompt_text || question.prompt;
   return <>
     <h3>{text}</h3>
-    {question.input_note && <p className="input-note"><b>입력/조건</b> {question.input_note}</p>}
+    <NoteBlock note={question.input_note} />
     {question.code_block && <div className="code-panel">
       <div className="code-title">{codeLangLabel(question.code_language)}</div>
       <pre><code>{question.code_block}</code></pre>
