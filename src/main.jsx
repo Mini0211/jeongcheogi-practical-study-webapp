@@ -156,6 +156,16 @@ function Auth({ onLogin }) {
   </section>;
 }
 
+const QUESTION_TYPES = [
+  { value: '', label: '전체 유형' },
+  { value: 'short_answer', label: '단답형' },
+  { value: 'blank', label: '빈칸형' },
+  { value: 'sql', label: 'SQL형' },
+  { value: 'code_output', label: '코드 출력형' },
+  { value: 'keyword', label: '키워드형' },
+];
+const TYPE_LABELS = Object.fromEntries(QUESTION_TYPES.map(t => [t.value, t.label]));
+
 function Dashboard({ token, user, onLogout }) {
   const [health, setHealth] = useState(null);
   const [me, setMe] = useState(null);
@@ -164,18 +174,29 @@ function Dashboard({ token, user, onLogout }) {
   const [answer, setAnswer] = useState('');
   const [result, setResult] = useState(null);
   const [wrong, setWrong] = useState([]);
+  const [selectedType, setSelectedType] = useState('');
   const categories = useMemo(() => [...new Set(questions.map(q => q.category))], [questions]);
 
-  async function load() {
+  async function load(type = selectedType) {
     setHealth(await api('/health'));
     setMe(await api('/me', {}, token));
-    const q = await api('/questions?limit=20', {}, token);
+    const qs = new URLSearchParams({ limit: '20' });
+    if (type) qs.set('type', type);
+    const q = await api(`/questions?${qs.toString()}`, {}, token);
     setQuestions(q.questions);
     setCurrent(q.questions[0] || null);
+    setAnswer('');
+    setResult(null);
     const w = await api('/wrong-notes', {}, token);
     setWrong(w.wrong_notes || []);
   }
-  useEffect(() => { load().catch(e => setResult({ feedback: e.message })); }, []);
+  useEffect(() => { load('').catch(e => setResult({ feedback: e.message })); }, []);
+
+  async function changeType(type) {
+    setSelectedType(type);
+    try { await load(type); }
+    catch (e) { setResult({ correct: false, feedback: '유형 조회 오류: ' + e.message }); }
+  }
 
   async function submitAnswer() {
     if (!current) return;
@@ -208,22 +229,27 @@ function Dashboard({ token, user, onLogout }) {
       <div className="card"><b>정답</b><span>{me?.stats?.correct ?? 0}회</span></div>
     </section>
 
+    <section className="card type-card">
+      <div className="type-head"><h2>문제 유형 선택</h2><p className="meta">선택한 유형의 문제만 불러옵니다.</p></div>
+      <div className="type-buttons">{QUESTION_TYPES.map(t => <button key={t.value || 'all'} className={selectedType === t.value ? 'type-btn active' : 'type-btn'} onClick={() => changeType(t.value)}>{t.label}</button>)}</div>
+    </section>
+
     <section className="grid main-grid">
       <div className="card">
         <h2>문제 풀이</h2>
         <div className="chips">{categories.map(c => <span className="chip" key={c}>{c}</span>)}</div>
         {current ? <>
-          <p className="meta">#{current.id} · {current.category} · {current.type} · {current.difficulty}</p>
+          <p className="meta">#{current.id} · {current.category} · {TYPE_LABELS[current.type] || current.type} · {current.difficulty}</p>
           <h3>{current.prompt}</h3>
           <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
           <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button></div>
           {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b><p>{result.explanation}</p></div>}
-        </> : <p>문제가 없습니다.</p>}
+        </> : <p>선택한 유형에 해당하는 문제가 없습니다.</p>}
       </div>
 
       <div className="card">
         <h2>문제 목록</h2>
-        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); setAnswer(''); }}>{q.category} · {q.prompt.slice(0, 38)}...</button></li>)}</ul>
+        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); setAnswer(''); }}><b>{TYPE_LABELS[q.type] || q.type}</b> · {q.category}<br />{q.prompt.slice(0, 38)}...</button></li>)}</ul>
       </div>
     </section>
 
