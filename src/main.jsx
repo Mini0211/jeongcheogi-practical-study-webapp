@@ -75,11 +75,16 @@ function Dashboard({ token, user, onLogout }) {
 
   async function submitAnswer() {
     if (!current) return;
-    const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: current.id, answer }) }, token);
-    setResult(data.result);
-    setAnswer('');
-    const [m, w] = await Promise.all([api('/me', {}, token), api('/wrong-notes', {}, token)]);
-    setMe(m); setWrong(w.wrong_notes || []);
+    try {
+      setResult({ feedback: '채점 중입니다...' });
+      const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(current.id), answer }) }, token);
+      setResult(data.result);
+      setAnswer('');
+      const [m, w] = await Promise.all([api('/me', {}, token), api('/wrong-notes', {}, token)]);
+      setMe(m); setWrong(w.wrong_notes || []);
+    } catch (err) {
+      setResult({ correct: false, feedback: `채점 오류: ${err.message}`, explanation: '잠시 후 다시 시도하거나 로그인 상태를 확인해주세요.' });
+    }
   }
 
   return <main className="wrap">
@@ -114,7 +119,7 @@ function Dashboard({ token, user, onLogout }) {
 
       <div className="card">
         <h2>문제 목록</h2>
-        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); }}>{q.category} · {q.prompt.slice(0, 38)}...</button></li>)}</ul>
+        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); setAnswer(''); }}>{q.category} · {q.prompt.slice(0, 38)}...</button></li>)}</ul>
       </div>
     </section>
 
