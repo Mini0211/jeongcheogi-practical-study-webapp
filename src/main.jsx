@@ -185,35 +185,69 @@ function QuestionBody({ question }) {
 }
 
 function Dashboard({ token, user, onLogout }) {
+  const [viewMode, setViewMode] = useState('study');
   const [health, setHealth] = useState(null);
   const [me, setMe] = useState(null);
+  const [questionSets, setQuestionSets] = useState([]);
+  const [selectedSet, setSelectedSet] = useState('');
   const [questions, setQuestions] = useState([]);
   const [current, setCurrent] = useState(null);
   const [answer, setAnswer] = useState('');
   const [result, setResult] = useState(null);
+  const [explanation, setExplanation] = useState(null);
   const [wrong, setWrong] = useState([]);
   const [selectedType, setSelectedType] = useState('');
+  const [examAnswers, setExamAnswers] = useState({});
+  const [examResults, setExamResults] = useState(null);
+  const [examMsg, setExamMsg] = useState('');
   const categories = useMemo(() => [...new Set(questions.map(q => q.category))], [questions]);
 
-  async function load(type = selectedType) {
+  function applySetParams(params, setValue = selectedSet) {
+    if (!setValue) return;
+    const [year, round, ...kindParts] = setValue.split('-');
+    const kind = kindParts.join('-');
+    if (year) params.set('exam_year', year);
+    if (round) params.set('exam_round', round);
+    if (kind) params.set('source_kind', kind);
+  }
+
+  async function load(type = selectedType, setValue = selectedSet) {
     setHealth(await api('/health'));
     setMe(await api('/me', {}, token));
-    const qs = new URLSearchParams({ limit: '20' });
+    const sets = await api('/question-sets', {}, token);
+    setQuestionSets(sets.sets || []);
+    const qs = new URLSearchParams({ limit: '100' });
+    applySetParams(qs, setValue);
     if (type) qs.set('type', type);
     const q = await api(`/questions?${qs.toString()}`, {}, token);
     setQuestions(q.questions);
     setCurrent(q.questions[0] || null);
     setAnswer('');
     setResult(null);
+    setExplanation(null);
+    setExamAnswers({});
+    setExamResults(null);
+    setExamMsg('');
     const w = await api('/wrong-notes', {}, token);
     setWrong(w.wrong_notes || []);
   }
-  useEffect(() => { load('').catch(e => setResult({ feedback: e.message })); }, []);
+  useEffect(() => { load('', '').catch(e => setResult({ feedback: e.message })); }, []);
 
+  async function changeSet(value) {
+    setSelectedSet(value);
+    try { await load(selectedType, value); }
+    catch (e) { setResult({ correct: false, feedback: '문제 세트 조회 오류: ' + e.message }); }
+  }
   async function changeType(type) {
     setSelectedType(type);
-    try { await load(type); }
+    try { await load(type, selectedSet); }
     catch (e) { setResult({ correct: false, feedback: '유형 조회 오류: ' + e.message }); }
+  }
+  function selectQuestion(q) {
+    setCurrent(q);
+    setResult(null);
+    setExplanation(null);
+    setAnswer('');
   }
 
   async function submitAnswer() {
@@ -222,13 +256,52 @@ function Dashboard({ token, user, onLogout }) {
       setResult({ feedback: '채점 중입니다...' });
       const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(current.id), answer }) }, token);
       setResult(data.result);
-      setAnswer('');
       const [m, w] = await Promise.all([api('/me', {}, token), api('/wrong-notes', {}, token)]);
       setMe(m); setWrong(w.wrong_notes || []);
     } catch (err) {
       setResult({ correct: false, feedback: `채점 오류: ${err.message}`, explanation: '잠시 후 다시 시도하거나 로그인 상태를 확인해주세요.' });
     }
   }
+
+  async function showExplanation() {
+    if (!current) return;
+    try {
+      setExplanation({ loading: true });
+      const data = await api(`/questions/${current.id}/explanation`, {}, token);
+      setExplanation(data);
+    } catch (err) {
+      setExplanation({ error: err.message });
+    }
+  }
+
+  function setExamAnswer(id, value) {
+    setExamAnswers(prev => ({ ...prev, [id]: value }));
+  }
+  async function submitExam() {
+    if (!questions.length) return;
+    setExamMsg('시험 답안을 제출하고 채점 중입니다...');
+    const results = [];
+    for (const q of questions) {
+      const userAnswer = (examAnswers[q.id] || '').trim();
+      if (!userAnswer) {
+        results.push({ question: q, userAnswer, correct: false, feedback: '미답입니다.', explanation: '' });
+        continue;
+      }
+      try {
+        const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(q.id), answer: userAnswer }) }, token);
+        results.push({ question: q, userAnswer, ...data.result });
+      } catch (err) {
+        results.push({ question: q, userAnswer, correct: false, feedback: '채점 오류: ' + err.message, explanation: '' });
+      }
+    }
+    setExamResults(results);
+    setExamMsg('제출 완료');
+    const [m, w] = await Promise.all([api('/me', {}, token), api('/wrong-notes', {}, token)]);
+    setMe(m); setWrong(w.wrong_notes || []);
+  }
+
+  const examCorrect = examResults?.filter(r => r.correct).length || 0;
+  const examScore = examResults ? Math.round((examCorrect / Math.max(examResults.length, 1)) * 100) : 0;
 
   return <main className="wrap">
     <header className="hero">
@@ -247,29 +320,59 @@ function Dashboard({ token, user, onLogout }) {
       <div className="card"><b>정답</b><span>{me?.stats?.correct ?? 0}회</span></div>
     </section>
 
-    <section className="card type-card">
-      <div className="type-head"><h2>문제 유형 선택</h2><p className="meta">선택한 유형의 문제만 불러옵니다.</p></div>
-      <div className="type-buttons">{QUESTION_TYPES.map(t => <button key={t.value || 'all'} className={selectedType === t.value ? 'type-btn active' : 'type-btn'} onClick={() => changeType(t.value)}>{t.label}</button>)}</div>
+    <section className="card mode-card">
+      <div className="mode-tabs">
+        <button className={viewMode === 'study' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('study')}>학습 모드</button>
+        <button className={viewMode === 'exam' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('exam')}>시험 모드</button>
+      </div>
+      <label>문제 세트</label>
+      <select value={selectedSet} onChange={e => changeSet(e.target.value)}>
+        <option value="">전체 문제</option>
+        {questionSets.map(set => <option key={set.value} value={set.value}>{set.label} ({set.question_count}문항)</option>)}
+      </select>
     </section>
 
-    <section className="grid main-grid">
-      <div className="card">
-        <h2>문제 풀이</h2>
-        <div className="chips">{categories.map(c => <span className="chip" key={c}>{c}</span>)}</div>
-        {current ? <>
-          <p className="meta">{examLabel(current)} · #{current.id} · {current.category} · {TYPE_LABELS[current.type] || current.type} · {current.difficulty}</p>
-          <QuestionBody question={current} />
-          <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
-          <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button></div>
-          {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b><p>{result.explanation}</p></div>}
-        </> : <p>선택한 유형에 해당하는 문제가 없습니다.</p>}
-      </div>
+    {viewMode === 'study' && <>
+      <section className="card type-card">
+        <div className="type-head"><h2>문제 유형 선택</h2><p className="meta">선택한 유형의 문제만 불러옵니다.</p></div>
+        <div className="type-buttons">{QUESTION_TYPES.map(t => <button key={t.value || 'all'} className={selectedType === t.value ? 'type-btn active' : 'type-btn'} onClick={() => changeType(t.value)}>{t.label}</button>)}</div>
+      </section>
 
-      <div className="card">
-        <h2>문제 목록</h2>
-        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); setAnswer(''); }}><b>{examLabel(q)}</b> · {TYPE_LABELS[q.type] || q.type} · {q.category}<br />{(q.prompt_text || q.prompt).slice(0, 38)}...</button></li>)}</ul>
-      </div>
-    </section>
+      <section className="grid main-grid">
+        <div className="card">
+          <h2>문제 풀이</h2>
+          <div className="chips">{categories.map(c => <span className="chip" key={c}>{c}</span>)}</div>
+          {current ? <>
+            <p className="meta">{examLabel(current)} · #{current.id} · {current.category} · {TYPE_LABELS[current.type] || current.type} · {current.difficulty}</p>
+            <QuestionBody question={current} />
+            <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
+            <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button><button onClick={showExplanation}>해설</button></div>
+            {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b></div>}
+            {explanation && <div className="explain-box"><b>해설</b>{explanation.loading ? <p>불러오는 중...</p> : explanation.error ? <p>{explanation.error}</p> : <><p><b>정답:</b> {explanation.answer}</p><p>{explanation.explanation || '해설이 아직 없습니다.'}</p></>}</div>}
+          </> : <p>선택한 조건에 해당하는 문제가 없습니다.</p>}
+        </div>
+
+        <div className="card">
+          <h2>문제 목록</h2>
+          <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => selectQuestion(q)}><b>{examLabel(q)}</b> · {TYPE_LABELS[q.type] || q.type} · {q.category}<br />{(q.prompt_text || q.prompt).slice(0, 38)}...</button></li>)}</ul>
+        </div>
+      </section>
+    </>}
+
+    {viewMode === 'exam' && <section className="card exam-card">
+      <div className="exam-head"><div><h2>시험 모드</h2><p className="meta">정답과 해설은 제출 전까지 숨깁니다. 현재 선택 세트 기준 {questions.length}문항입니다.</p></div><button className="primary" onClick={submitExam}>제출하기</button></div>
+      {examMsg && <p className="msg">{examMsg}</p>}
+      {examResults && <div className="result good"><b>결과: {examCorrect}/{examResults.length}문항 정답 · {examScore}점</b></div>}
+      <div className="exam-list">{questions.map((q, idx) => {
+        const r = examResults?.find(x => x.question.id === q.id);
+        return <article className="exam-question" key={q.id}>
+          <p className="meta">{idx + 1}번 · {examLabel(q)} · {TYPE_LABELS[q.type] || q.type} · {q.category}</p>
+          <QuestionBody question={q} />
+          <textarea disabled={!!examResults} value={examAnswers[q.id] || ''} onChange={e => setExamAnswer(q.id, e.target.value)} placeholder="답안을 입력하세요" />
+          {r && <div className={r.correct ? 'result good' : 'result bad'}><b>{r.feedback}</b><p><b>내 답:</b> {r.userAnswer || '(미답)'}</p>{r.explanation && <p>{r.explanation}</p>}</div>}
+        </article>;
+      })}</div>
+    </section>}
 
     <section className="card">
       <h2>오답노트</h2>
