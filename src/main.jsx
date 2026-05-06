@@ -28,9 +28,33 @@ function Auth({ onLogin }) {
   const [inviteCode, setInviteCode] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteAttempts, setInviteAttempts] = useState(0);
+  const [usernameStatus, setUsernameStatus] = useState(null);
   const [msg, setMsg] = useState('');
+  useEffect(() => {
+    if (mode !== 'register') { setUsernameStatus(null); return; }
+    const value = username.trim();
+    if (!value) { setUsernameStatus(null); return; }
+    if (!/^[a-zA-Z0-9_.@-]{3,64}$/.test(value)) {
+      setUsernameStatus({ tone: 'bad', text: '아이디는 3자 이상 영문/숫자/._@-만 가능합니다.' });
+      return;
+    }
+    setUsernameStatus({ tone: 'checking', text: '아이디 확인 중...' });
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api(`/auth/check-username?username=${encodeURIComponent(value)}`);
+        setUsernameStatus(data.available ? { tone: 'good', text: '사용 가능한 아이디 입니다.' } : { tone: 'bad', text: '중복 아이디 입니다.' });
+      } catch (err) {
+        setUsernameStatus({ tone: 'bad', text: err.message || '아이디 확인 실패' });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [mode, username]);
   async function submit(e) {
     e.preventDefault();
+    if (mode === 'register' && usernameStatus?.tone !== 'good') {
+      setMsg('사용 가능한 아이디인지 먼저 확인해주세요.');
+      return;
+    }
     setMsg('처리 중...');
     try {
       const body = mode === 'register' ? { username, nickname, password, invite_code: inviteCode } : { username, password };
@@ -71,6 +95,7 @@ function Auth({ onLogin }) {
     setInviteCode('');
     setInviteAttempts(0);
     setInviteOpen(false);
+    setUsernameStatus(null);
     setMsg('');
   }
   return <section className="auth card">
@@ -78,7 +103,10 @@ function Auth({ onLogin }) {
     <p>개인 학습 기록, 오답노트, 변형문제 준비용 MVP입니다.</p>
     <form onSubmit={submit}>
       <label>아이디 또는 이메일</label>
-      <input value={username} onChange={e => setUsername(e.target.value)} placeholder="study-id" />
+      <div className="username-row">
+        <input value={username} onChange={e => setUsername(e.target.value)} placeholder="study-id" />
+        {mode === 'register' && usernameStatus && <span className={`username-status ${usernameStatus.tone}`}>{usernameStatus.text}</span>}
+      </div>
       {mode === 'register' && <><label>닉네임</label><input value={nickname} onChange={e => setNickname(e.target.value)} /></>}
       <label>비밀번호</label>
       <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" />

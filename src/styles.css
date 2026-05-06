@@ -3,3 +3,5 @@
 .modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:50}.modal{max-width:420px;width:100%;box-shadow:0 24px 80px rgba(0,0,0,.22)}.modal h2{margin-bottom:8px}
 
 .signup-link{width:100%;margin-top:14px;background:#eef2ff;color:#1d4ed8;border:1px solid #c7d2fe;font-size:16px;box-shadow:0 8px 22px rgba(29,78,216,.10)}.signup-link:hover{background:#dbeafe}
+
+.username-row{display:grid;grid-template-columns:1fr;gap:7px}.username-status{font-size:13px;font-weight:900}.username-status.good{color:#047857}.username-status.bad{color:#dc2626}.username-status.checking{color:#6b7280}
