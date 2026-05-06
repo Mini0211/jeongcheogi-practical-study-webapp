@@ -430,7 +430,6 @@ function Dashboard({ token, user, onLogout }) {
         </div>
         <div className="header-actions">
           <button className="menu-open" onClick={() => setMenuOpen(true)} aria-label="메뉴 열기">☰</button>
-          <button onClick={onLogout}>로그아웃</button>
         </div>
       </header>
 
