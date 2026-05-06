@@ -166,7 +166,22 @@ const QUESTION_TYPES = [
 ];
 const TYPE_LABELS = Object.fromEntries(QUESTION_TYPES.map(t => [t.value, t.label]));
 function examLabel(q) {
-  return q?.exam_year && q?.exam_round ? `${q.exam_year}년 ${q.exam_round}회${q.original_no ? ` #${q.original_no}` : ''}` : '연습문제';
+  return q?.exam_year && q?.exam_round ? `${q.exam_year}년 ${q.exam_round}회${q.original_no ? ` #${q.original_no}` : ""}` : '연습문제';
+}
+function codeLangLabel(lang) {
+  const labels = { c: 'C', java: 'Java', python: 'Python', sql: 'SQL' };
+  return labels[lang] || 'Code';
+}
+function QuestionBody({ question }) {
+  const text = question.prompt_text || question.prompt;
+  return <>
+    <h3>{text}</h3>
+    {question.input_note && <p className="input-note"><b>입력/조건</b> {question.input_note}</p>}
+    {question.code_block && <div className="code-panel">
+      <div className="code-title">{codeLangLabel(question.code_language)}</div>
+      <pre><code>{question.code_block}</code></pre>
+    </div>}
+  </>;
 }
 
 function Dashboard({ token, user, onLogout }) {
@@ -243,7 +258,7 @@ function Dashboard({ token, user, onLogout }) {
         <div className="chips">{categories.map(c => <span className="chip" key={c}>{c}</span>)}</div>
         {current ? <>
           <p className="meta">{examLabel(current)} · #{current.id} · {current.category} · {TYPE_LABELS[current.type] || current.type} · {current.difficulty}</p>
-          <h3>{current.prompt}</h3>
+          <QuestionBody question={current} />
           <textarea value={answer} onChange={e => setAnswer(e.target.value)} placeholder="답안을 입력하세요" />
           <div className="actions"><button className="primary" onClick={submitAnswer}>채점하기</button></div>
           {result && <div className={result.correct ? 'result good' : 'result bad'}><b>{result.feedback}</b><p>{result.explanation}</p></div>}
@@ -252,7 +267,7 @@ function Dashboard({ token, user, onLogout }) {
 
       <div className="card">
         <h2>문제 목록</h2>
-        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); setAnswer(''); }}><b>{examLabel(q)}</b> · {TYPE_LABELS[q.type] || q.type} · {q.category}<br />{q.prompt.slice(0, 38)}...</button></li>)}</ul>
+        <ul className="question-list">{questions.map(q => <li key={q.id}><button onClick={() => { setCurrent(q); setResult(null); setAnswer(''); }}><b>{examLabel(q)}</b> · {TYPE_LABELS[q.type] || q.type} · {q.category}<br />{(q.prompt_text || q.prompt).slice(0, 38)}...</button></li>)}</ul>
       </div>
     </section>
 

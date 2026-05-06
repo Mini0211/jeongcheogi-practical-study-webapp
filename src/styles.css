@@ -7,3 +7,5 @@
 .username-row{display:grid;grid-template-columns:1fr;gap:7px}.username-status{font-size:13px;font-weight:900}.username-status.good{color:#047857}.username-status.bad{color:#dc2626}.username-status.checking{color:#6b7280}
 
 .type-card{margin-bottom:16px}.type-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}.type-buttons{display:flex;gap:8px;flex-wrap:wrap}.type-btn{background:#f3f4f6;color:#374151;border:1px solid #e5e7eb}.type-btn.active{background:#1f2937;color:white;border-color:#1f2937}
+
+.code-panel{margin:16px 0;border:1px solid #1f2937;border-radius:14px;overflow:hidden;background:#0f172a;box-shadow:0 12px 28px rgba(15,23,42,.16)}.code-title{display:flex;justify-content:space-between;align-items:center;padding:9px 13px;background:#111827;color:#d1d5db;font-size:13px;font-weight:800;letter-spacing:.02em}.code-panel pre{margin:0;padding:16px;overflow:auto;color:#e5e7eb;font-size:14px;line-height:1.62;tab-size:2}.code-panel code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}.input-note{padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;color:#9a3412}
