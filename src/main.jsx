@@ -29,6 +29,7 @@ function Auth({ onLogin }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteAttempts, setInviteAttempts] = useState(0);
   const [usernameStatus, setUsernameStatus] = useState(null);
+  const [nicknameStatus, setNicknameStatus] = useState(null);
   const [msg, setMsg] = useState('');
   useEffect(() => {
     if (mode !== 'register') { setUsernameStatus(null); return; }
@@ -49,10 +50,33 @@ function Auth({ onLogin }) {
     }, 350);
     return () => clearTimeout(timer);
   }, [mode, username]);
+  useEffect(() => {
+    if (mode !== 'register') { setNicknameStatus(null); return; }
+    const value = nickname.trim();
+    if (!value) { setNicknameStatus(null); return; }
+    if (value.length > 40) {
+      setNicknameStatus({ tone: 'bad', text: '닉네임은 40자 이하로 입력해주세요.' });
+      return;
+    }
+    setNicknameStatus({ tone: 'checking', text: '닉네임 확인 중...' });
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api(`/auth/check-nickname?nickname=${encodeURIComponent(value)}`);
+        setNicknameStatus(data.available ? { tone: 'good', text: '사용 가능한 닉네임 입니다.' } : { tone: 'bad', text: '중복 닉네임 입니다.' });
+      } catch (err) {
+        setNicknameStatus({ tone: 'bad', text: err.message || '닉네임 확인 실패' });
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [mode, nickname]);
   async function submit(e) {
     e.preventDefault();
     if (mode === 'register' && usernameStatus?.tone !== 'good') {
       setMsg('사용 가능한 아이디인지 먼저 확인해주세요.');
+      return;
+    }
+    if (mode === 'register' && nicknameStatus?.tone !== 'good') {
+      setMsg('사용 가능한 닉네임인지 먼저 확인해주세요.');
       return;
     }
     setMsg('처리 중...');
@@ -96,6 +120,7 @@ function Auth({ onLogin }) {
     setInviteAttempts(0);
     setInviteOpen(false);
     setUsernameStatus(null);
+    setNicknameStatus(null);
     setMsg('');
   }
   return <section className="auth card">
@@ -107,7 +132,7 @@ function Auth({ onLogin }) {
         <input value={username} onChange={e => setUsername(e.target.value)} placeholder="study-id" />
         {mode === 'register' && usernameStatus && <span className={`username-status ${usernameStatus.tone}`}>{usernameStatus.text}</span>}
       </div>
-      {mode === 'register' && <><label>닉네임</label><input value={nickname} onChange={e => setNickname(e.target.value)} /></>}
+      {mode === 'register' && <><label>닉네임</label><div className="username-row"><input value={nickname} onChange={e => setNickname(e.target.value)} />{nicknameStatus && <span className={`username-status ${nicknameStatus.tone}`}>{nicknameStatus.text}</span>}</div></>}
       <label>비밀번호</label>
       <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" />
       <button className="primary">{mode === 'register' ? '완료' : '로그인'}</button>
