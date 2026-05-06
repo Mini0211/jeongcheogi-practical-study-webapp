@@ -196,9 +196,12 @@ function ExplanationBlock({ answer, text, loading, error }) {
     }
   }
   push();
+  const answerSection = sections.find(section => section.title === '정답');
+  const displayAnswer = answer || answerSection?.lines.join(' / ');
+  const visibleSections = sections.filter(section => section.title !== '정답');
   return <div className="explanation-block">
-    {answer && <div className="answer-card"><span>정답</span><strong>{answer}</strong></div>}
-    {sections.map((section, idx) => <section className={`ex-section ex-${section.title}`} key={`${section.title}-${idx}`}>
+    {displayAnswer && <div className="answer-card"><span>정답</span><strong>{displayAnswer}</strong></div>}
+    {visibleSections.map((section, idx) => <section className={`ex-section ex-${section.title}`} key={`${section.title}-${idx}`}>
       <h4>{section.title}</h4>
       <div className="ex-lines">{section.lines.map((line, lineIdx) => {
         const step = line.match(/^(\d+)\.\s*(.*)$/);
