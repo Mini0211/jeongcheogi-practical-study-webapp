@@ -412,7 +412,6 @@ function Dashboard({ token, user, onLogout }) {
       <div>
         <p className="eyebrow">Jeongcheogi Practical Study</p>
         <h1>정보처리기사 실기 공부앱</h1>
-        <p>{user?.nickname || '주인님'} 전용 학습 대시보드입니다.</p>
       </div>
       <button onClick={onLogout}>로그아웃</button>
     </header>
@@ -425,16 +424,19 @@ function Dashboard({ token, user, onLogout }) {
     </section>
 
     <section className="card mode-card">
-      <div className="mode-tabs">
-        <button className={viewMode === 'study' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('study')}>학습 모드</button>
-        <button className={viewMode === 'exam' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('exam')}>시험 모드</button>
+      <div className="mode-tabs app-menu" aria-label="학습 메뉴">
+        <button className={viewMode === 'study' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('study')}>학습모드</button>
+        <button className={viewMode === 'exam' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('exam')}>시험모드</button>
+        <button className={viewMode === 'wrong' ? 'mode-tab active' : 'mode-tab'} onClick={() => setViewMode('wrong')}>오답노트</button>
       </div>
-      <label>문제 세트</label>
-      <select value={selectedSet} onChange={e => changeSet(e.target.value)}>
-        <option value="">전체 문제</option>
-        {questionSets.map(set => <option key={set.value} value={set.value}>{set.label} ({set.question_count}문항)</option>)}
-        <option value="random-20">랜덤 모의고사 20문항</option>
-      </select>
+      {viewMode !== 'wrong' && <>
+        <label>문제 세트</label>
+        <select value={selectedSet} onChange={e => changeSet(e.target.value)}>
+          <option value="">전체 문제</option>
+          {questionSets.map(set => <option key={set.value} value={set.value}>{set.label} ({set.question_count}문항)</option>)}
+          <option value="random-20">랜덤 모의고사 20문항</option>
+        </select>
+      </>}
     </section>
 
     {viewMode === 'study' && <>
@@ -479,10 +481,11 @@ function Dashboard({ token, user, onLogout }) {
       })}</div>
     </section>}
 
-    <section className="card">
+    {viewMode === 'wrong' && <section className="card wrong-card">
       <h2>오답노트</h2>
+      <p className="meta">틀린 문제와 재복습할 항목을 모아봅니다.</p>
       {wrong.length ? <ul className="wrong-list">{wrong.map(w => <li key={w.id}><b>{w.category}</b> {w.prompt}<small>{w.reason}</small></li>)}</ul> : <p>아직 오답이 없습니다.</p>}
-    </section>
+    </section>}
   </main>;
 }
 
