@@ -25,21 +25,29 @@ function Auth({ onLogin }) {
   const [username, setUsername] = useState('');
   const [nickname, setNickname] = useState('주인님');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [msg, setMsg] = useState('');
   async function submit(e) {
     e.preventDefault();
+    if (mode === 'register' && !inviteCode) {
+      setInviteOpen(true);
+      setMsg('초대코드를 입력하면 회원가입이 진행됩니다.');
+      return;
+    }
     setMsg('처리 중...');
     try {
-      let body = { username, password };
-      if (mode === 'register') {
-        const invite_code = window.prompt('회원가입 초대코드를 입력해주세요. 대소문자를 구분합니다.');
-        if (!invite_code) { setMsg('초대코드 입력이 취소되었습니다.'); return; }
-        body = { username, nickname, password, invite_code };
-      }
+      const body = mode === 'register' ? { username, nickname, password, invite_code: inviteCode } : { username, password };
       const data = await api(mode === 'register' ? '/auth/register' : '/auth/login', { method: 'POST', body: JSON.stringify(body) });
       localStorage.setItem('jcg_token', data.token);
       onLogin(data.token, data.user);
     } catch (err) { setMsg(err.message); }
+  }
+  function switchMode() {
+    setMode(mode === 'register' ? 'login' : 'register');
+    setInviteCode('');
+    setInviteOpen(false);
+    setMsg('');
   }
   return <section className="auth card">
     <h1>정처기 실기 공부앱</h1>
@@ -52,8 +60,19 @@ function Auth({ onLogin }) {
       <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" />
       <button className="primary">{mode === 'register' ? '회원가입' : '로그인'}</button>
     </form>
-    <button className="link" onClick={() => setMode(mode === 'register' ? 'login' : 'register')}>{mode === 'register' ? '이미 계정이 있어요' : '처음이면 회원가입'}</button>
+    <button className="link" onClick={switchMode}>{mode === 'register' ? '이미 계정이 있어요' : '처음이면 회원가입'}</button>
     {msg && <p className="msg">{msg}</p>}
+    {inviteOpen && <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <div className="modal card">
+        <h2>회원가입 초대코드</h2>
+        <p>초대코드는 대소문자를 구분합니다.</p>
+        <input autoFocus value={inviteCode} onChange={e => setInviteCode(e.target.value)} placeholder="초대코드 입력" />
+        <div className="actions">
+          <button className="primary" onClick={(e) => { e.preventDefault(); setInviteOpen(false); setTimeout(() => document.querySelector('form')?.requestSubmit(), 0); }}>확인 후 회원가입</button>
+          <button onClick={(e) => { e.preventDefault(); setInviteOpen(false); setInviteCode(''); setMsg('초대코드 입력이 취소되었습니다.'); }}>취소</button>
+        </div>
+      </div>
+    </div>}
   </section>;
 }
 
