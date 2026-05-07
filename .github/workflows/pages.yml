@@ -25,6 +25,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+        env:
+          VITE_API_BASE: https://lumi-storage.taild1716c.ts.net/jcg
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

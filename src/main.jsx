@@ -2,9 +2,26 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://lumi-storage.taild1716c.ts.net/jcg';
+const API_BASE = import.meta.env.VITE_API_BASE;
+
+function decodeJwtPayload(token) {
+  try {
+    const base64 = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
+    if (!base64) return null;
+    const json = decodeURIComponent(atob(base64).split('').map(c => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join(''));
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function isExpiredToken(token) {
+  const payload = decodeJwtPayload(token);
+  return !payload?.exp || payload.exp * 1000 <= Date.now();
+}
 
 async function api(path, options = {}, token = '') {
+  if (!API_BASE) throw new Error('API 주소가 설정되지 않았습니다.');
   const res = await fetch(API_BASE + path, {
     ...options,
     headers: {
@@ -518,7 +535,14 @@ function Dashboard({ token, user, onLogout }) {
 }
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('jcg_token') || '');
+  const [token, setToken] = useState(() => {
+    const saved = localStorage.getItem('jcg_token') || '';
+    if (saved && isExpiredToken(saved)) {
+      localStorage.removeItem('jcg_token');
+      return '';
+    }
+    return saved;
+  });
   const [user, setUser] = useState(null);
   function logout() { localStorage.removeItem('jcg_token'); setToken(''); setUser(null); }
   if (!token) return <Auth onLogin={(t, u) => { setToken(t); setUser(u); }} />;
