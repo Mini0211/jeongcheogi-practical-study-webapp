@@ -4,29 +4,13 @@ import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-function decodeJwtPayload(token) {
-  try {
-    const base64 = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/');
-    if (!base64) return null;
-    const json = decodeURIComponent(atob(base64).split('').map(c => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`).join(''));
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
-
-function isExpiredToken(token) {
-  const payload = decodeJwtPayload(token);
-  return !payload?.exp || payload.exp * 1000 <= Date.now();
-}
-
-async function api(path, options = {}, token = '') {
+async function api(path, options = {}) {
   if (!API_BASE) throw new Error('API 주소가 설정되지 않았습니다.');
   const res = await fetch(API_BASE + path, {
+    credentials: 'include',
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
   });
@@ -100,8 +84,7 @@ function Auth({ onLogin }) {
     try {
       const body = mode === 'register' ? { username, nickname, password, invite_code: inviteCode } : { username, password };
       const data = await api(mode === 'register' ? '/auth/register' : '/auth/login', { method: 'POST', body: JSON.stringify(body) });
-      localStorage.setItem('jcg_token', data.token);
-      onLogin(data.token, data.user);
+      onLogin(data.user);
     } catch (err) { setMsg(err.message); }
   }
   function openSignupInvite() {
@@ -280,7 +263,7 @@ function QuestionBody({ question }) {
   </>;
 }
 
-function Dashboard({ token, user, onLogout }) {
+function Dashboard({ user, onLogout }) {
   const [viewMode, setViewMode] = useState('study');
   const [menuOpen, setMenuOpen] = useState(false);
   const [health, setHealth] = useState(null);
@@ -311,13 +294,13 @@ function Dashboard({ token, user, onLogout }) {
 
   async function load(type = selectedType, setValue = selectedSet) {
     setHealth(await api('/health'));
-    setMe(await api('/me', {}, token));
-    const sets = await api('/question-sets', {}, token);
+    setMe(await api('/me', {}));
+    const sets = await api('/question-sets', {});
     setQuestionSets(sets.sets || []);
     const qs = new URLSearchParams({ limit: '100' });
     applySetParams(qs, setValue);
     if (type) qs.set('type', type);
-    const q = await api(`/questions?${qs.toString()}`, {}, token);
+    const q = await api(`/questions?${qs.toString()}`, {});
     setQuestions(q.questions);
     setCurrent(q.questions[0] || null);
     setAnswer('');
@@ -326,7 +309,7 @@ function Dashboard({ token, user, onLogout }) {
     setExamAnswers({});
     setExamResults(null);
     setExamMsg('');
-    const w = await api('/wrong-notes', {}, token);
+    const w = await api('/wrong-notes', {});
     setWrong(w.wrong_notes || []);
   }
   useEffect(() => { load('', '').catch(e => setResult({ feedback: e.message })); }, []);
@@ -349,7 +332,7 @@ function Dashboard({ token, user, onLogout }) {
   }
   async function startRandomExam() {
     try {
-      const data = await api('/questions?limit=200', {}, token);
+      const data = await api('/questions?limit=200', {});
       const pool = data.questions || [];
       const picked = buildRandomExam(pool, 20);
       setQuestions(picked);
@@ -376,9 +359,9 @@ function Dashboard({ token, user, onLogout }) {
     if (!current) return;
     try {
       setResult({ feedback: '채점 중입니다...' });
-      const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(current.id), answer }) }, token);
+      const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(current.id), answer }) });
       setResult(data.result);
-      const [m, w] = await Promise.all([api('/me', {}, token), api('/wrong-notes', {}, token)]);
+      const [m, w] = await Promise.all([api('/me', {}), api('/wrong-notes', {})]);
       setMe(m); setWrong(w.wrong_notes || []);
     } catch (err) {
       setResult({ correct: false, feedback: `채점 오류: ${err.message}`, explanation: '잠시 후 다시 시도하거나 로그인 상태를 확인해주세요.' });
@@ -389,7 +372,7 @@ function Dashboard({ token, user, onLogout }) {
     if (!current) return;
     try {
       setExplanation({ loading: true });
-      const data = await api(`/questions/${current.id}/explanation`, {}, token);
+      const data = await api(`/questions/${current.id}/explanation`, {});
       setExplanation(data);
     } catch (err) {
       setExplanation({ error: err.message });
@@ -410,7 +393,7 @@ function Dashboard({ token, user, onLogout }) {
         continue;
       }
       try {
-        const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(q.id), answer: userAnswer }) }, token);
+        const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(q.id), answer: userAnswer }) });
         results.push({ question: q, userAnswer, ...data.result });
       } catch (err) {
         results.push({ question: q, userAnswer, correct: false, feedback: '채점 오류: ' + err.message, explanation: '' });
@@ -418,7 +401,7 @@ function Dashboard({ token, user, onLogout }) {
     }
     setExamResults(results);
     setExamMsg('제출 완료');
-    const [m, w] = await Promise.all([api('/me', {}, token), api('/wrong-notes', {}, token)]);
+    const [m, w] = await Promise.all([api('/me', {}), api('/wrong-notes', {})]);
     setMe(m); setWrong(w.wrong_notes || []);
   }
 
@@ -535,18 +518,33 @@ function Dashboard({ token, user, onLogout }) {
 }
 
 function App() {
-  const [token, setToken] = useState(() => {
-    const saved = localStorage.getItem('jcg_token') || '';
-    if (saved && isExpiredToken(saved)) {
-      localStorage.removeItem('jcg_token');
-      return '';
-    }
-    return saved;
-  });
   const [user, setUser] = useState(null);
-  function logout() { localStorage.removeItem('jcg_token'); setToken(''); setUser(null); }
-  if (!token) return <Auth onLogin={(t, u) => { setToken(t); setUser(u); }} />;
-  return <Dashboard token={token} user={user} onLogout={logout} />;
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api('/me')
+      .then(data => { if (alive) setUser(data.user); })
+      .catch(async () => {
+        try {
+          const refreshed = await api('/auth/refresh', { method: 'POST' });
+          if (alive) setUser(refreshed.user);
+        } catch {
+          if (alive) setUser(null);
+        }
+      })
+      .finally(() => { if (alive) setReady(true); });
+    return () => { alive = false; };
+  }, []);
+
+  async function logout() {
+    try { await api('/auth/logout', { method: 'POST' }); } catch {}
+    setUser(null);
+  }
+
+  if (!ready) return <main className="wrap"><section className="auth card"><h1>정처기 실기 공부앱</h1><p>로그인 상태를 확인 중입니다...</p></section></main>;
+  if (!user) return <Auth onLogin={setUser} />;
+  return <Dashboard user={user} onLogout={logout} />;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
