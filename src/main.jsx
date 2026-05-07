@@ -23,7 +23,7 @@ async function api(path, options = {}, token = '') {
 function Auth({ onLogin }) {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
-  const [nickname, setNickname] = useState('주인님');
+  const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
