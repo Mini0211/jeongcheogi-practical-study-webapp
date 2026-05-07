@@ -4,13 +4,14 @@ import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 
-async function api(path, options = {}) {
+async function api(path, options = {}, token = '') {
   if (!API_BASE) throw new Error('API 주소가 설정되지 않았습니다.');
   const res = await fetch(API_BASE + path, {
     credentials: 'include',
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {})
     }
   });
@@ -84,7 +85,7 @@ function Auth({ onLogin }) {
     try {
       const body = mode === 'register' ? { username, nickname, password, invite_code: inviteCode } : { username, password };
       const data = await api(mode === 'register' ? '/auth/register' : '/auth/login', { method: 'POST', body: JSON.stringify(body) });
-      onLogin(data.user);
+      onLogin(data.user, data.token || '');
     } catch (err) { setMsg(err.message); }
   }
   function openSignupInvite() {
@@ -263,7 +264,7 @@ function QuestionBody({ question }) {
   </>;
 }
 
-function Dashboard({ user, onLogout }) {
+function Dashboard({ user, accessToken, onLogout }) {
   const [viewMode, setViewMode] = useState('study');
   const [menuOpen, setMenuOpen] = useState(false);
   const [health, setHealth] = useState(null);
@@ -294,13 +295,13 @@ function Dashboard({ user, onLogout }) {
 
   async function load(type = selectedType, setValue = selectedSet) {
     setHealth(await api('/health'));
-    setMe(await api('/me', {}));
-    const sets = await api('/question-sets', {});
+    setMe(await api('/me', {}, accessToken));
+    const sets = await api('/question-sets', {}, accessToken);
     setQuestionSets(sets.sets || []);
     const qs = new URLSearchParams({ limit: '100' });
     applySetParams(qs, setValue);
     if (type) qs.set('type', type);
-    const q = await api(`/questions?${qs.toString()}`, {});
+    const q = await api(`/questions?${qs.toString()}`, {}, accessToken);
     setQuestions(q.questions);
     setCurrent(q.questions[0] || null);
     setAnswer('');
@@ -309,7 +310,7 @@ function Dashboard({ user, onLogout }) {
     setExamAnswers({});
     setExamResults(null);
     setExamMsg('');
-    const w = await api('/wrong-notes', {});
+    const w = await api('/wrong-notes', {}, accessToken);
     setWrong(w.wrong_notes || []);
   }
   useEffect(() => { load('', '').catch(e => setResult({ feedback: e.message })); }, []);
@@ -332,7 +333,7 @@ function Dashboard({ user, onLogout }) {
   }
   async function startRandomExam() {
     try {
-      const data = await api('/questions?limit=200', {});
+      const data = await api('/questions?limit=200', {}, accessToken);
       const pool = data.questions || [];
       const picked = buildRandomExam(pool, 20);
       setQuestions(picked);
@@ -359,9 +360,9 @@ function Dashboard({ user, onLogout }) {
     if (!current) return;
     try {
       setResult({ feedback: '채점 중입니다...' });
-      const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(current.id), answer }) });
+      const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(current.id), answer }) }, accessToken);
       setResult(data.result);
-      const [m, w] = await Promise.all([api('/me', {}), api('/wrong-notes', {})]);
+      const [m, w] = await Promise.all([api('/me', {}, accessToken), api('/wrong-notes', {}, accessToken)]);
       setMe(m); setWrong(w.wrong_notes || []);
     } catch (err) {
       setResult({ correct: false, feedback: `채점 오류: ${err.message}`, explanation: '잠시 후 다시 시도하거나 로그인 상태를 확인해주세요.' });
@@ -372,7 +373,7 @@ function Dashboard({ user, onLogout }) {
     if (!current) return;
     try {
       setExplanation({ loading: true });
-      const data = await api(`/questions/${current.id}/explanation`, {});
+      const data = await api(`/questions/${current.id}/explanation`, {}, accessToken);
       setExplanation(data);
     } catch (err) {
       setExplanation({ error: err.message });
@@ -393,7 +394,7 @@ function Dashboard({ user, onLogout }) {
         continue;
       }
       try {
-        const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(q.id), answer: userAnswer }) });
+        const data = await api('/attempts', { method: 'POST', body: JSON.stringify({ question_id: Number(q.id), answer: userAnswer }) }, accessToken);
         results.push({ question: q, userAnswer, ...data.result });
       } catch (err) {
         results.push({ question: q, userAnswer, correct: false, feedback: '채점 오류: ' + err.message, explanation: '' });
@@ -401,7 +402,7 @@ function Dashboard({ user, onLogout }) {
     }
     setExamResults(results);
     setExamMsg('제출 완료');
-    const [m, w] = await Promise.all([api('/me', {}), api('/wrong-notes', {})]);
+    const [m, w] = await Promise.all([api('/me', {}, accessToken), api('/wrong-notes', {}, accessToken)]);
     setMe(m); setWrong(w.wrong_notes || []);
   }
 
@@ -519,6 +520,7 @@ function Dashboard({ user, onLogout }) {
 
 function App() {
   const [user, setUser] = useState(null);
+  const [accessToken, setAccessToken] = useState('');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -528,7 +530,7 @@ function App() {
       .catch(async () => {
         try {
           const refreshed = await api('/auth/refresh', { method: 'POST' });
-          if (alive) setUser(refreshed.user);
+          if (alive) { setUser(refreshed.user); setAccessToken(refreshed.token || ''); }
         } catch {
           if (alive) setUser(null);
         }
@@ -540,11 +542,17 @@ function App() {
   async function logout() {
     try { await api('/auth/logout', { method: 'POST' }); } catch {}
     setUser(null);
+    setAccessToken('');
+  }
+
+  function handleLogin(nextUser, token = '') {
+    setUser(nextUser);
+    setAccessToken(token);
   }
 
   if (!ready) return <main className="wrap"><section className="auth card"><h1>정처기 실기 공부앱</h1><p>로그인 상태를 확인 중입니다...</p></section></main>;
-  if (!user) return <Auth onLogin={setUser} />;
-  return <Dashboard user={user} onLogout={logout} />;
+  if (!user) return <Auth onLogin={handleLogin} />;
+  return <Dashboard user={user} accessToken={accessToken} onLogout={logout} />;
 }
 
 createRoot(document.getElementById('root')).render(<App />);
