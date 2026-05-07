@@ -3,6 +3,18 @@ import { createRoot } from 'react-dom/client';
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE;
+const SESSION_TOKEN_KEY = 'jcg_session_access';
+
+function loadSessionToken() {
+  try { return sessionStorage.getItem(SESSION_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+function saveSessionToken(token = '') {
+  try {
+    if (token) sessionStorage.setItem(SESSION_TOKEN_KEY, token);
+    else sessionStorage.removeItem(SESSION_TOKEN_KEY);
+  } catch {}
+}
 
 async function api(path, options = {}, token = '') {
   if (!API_BASE) throw new Error('API 주소가 설정되지 않았습니다.');
@@ -520,17 +532,17 @@ function Dashboard({ user, accessToken, onLogout }) {
 
 function App() {
   const [user, setUser] = useState(null);
-  const [accessToken, setAccessToken] = useState('');
+  const [accessToken, setAccessToken] = useState(() => loadSessionToken());
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    api('/me')
+    api('/me', {}, loadSessionToken())
       .then(data => { if (alive) setUser(data.user); })
       .catch(async () => {
         try {
           const refreshed = await api('/auth/refresh', { method: 'POST' });
-          if (alive) { setUser(refreshed.user); setAccessToken(refreshed.token || ''); }
+          if (alive) { setUser(refreshed.user); setAccessToken(refreshed.token || ''); saveSessionToken(refreshed.token || ''); }
         } catch {
           if (alive) setUser(null);
         }
@@ -543,11 +555,13 @@ function App() {
     try { await api('/auth/logout', { method: 'POST' }); } catch {}
     setUser(null);
     setAccessToken('');
+    saveSessionToken('');
   }
 
   function handleLogin(nextUser, token = '') {
     setUser(nextUser);
     setAccessToken(token);
+    saveSessionToken(token);
   }
 
   if (!ready) return <main className="wrap"><section className="auth card"><h1>정처기 실기 공부앱</h1><p>로그인 상태를 확인 중입니다...</p></section></main>;
