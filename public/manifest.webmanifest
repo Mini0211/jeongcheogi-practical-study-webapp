@@ -1,0 +1,19 @@
+{
+  "name": "정처기 실기 공부앱",
+  "short_name": "정처기",
+  "description": "정보처리기사 실기 기출, 빈칸형, 키워드형, 오답노트를 학습하는 PWA",
+  "start_url": "/jeongcheogi-practical-study-webapp/",
+  "scope": "/jeongcheogi-practical-study-webapp/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f6f7fb",
+  "theme_color": "#111827",
+  "categories": ["education", "productivity"],
+  "lang": "ko-KR",
+  "icons": [
+    { "src": "pwa-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "pwa-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "pwa-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "pwa-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
