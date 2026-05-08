@@ -182,8 +182,9 @@ const TYPE_LABELS = Object.fromEntries(QUESTION_TYPES.map(t => [t.value, t.label
 function shuffleItems(items) {
   return [...items].sort(() => Math.random() - 0.5);
 }
-function buildRandomExam(allQuestions, count = 20) {
-  const byType = allQuestions.reduce((acc, q) => {
+function buildRandomExam(allQuestions, count = 20, type = '') {
+  const source = type ? allQuestions.filter(q => q.type === type) : allQuestions;
+  const byType = source.reduce((acc, q) => {
     (acc[q.type] ||= []).push(q);
     return acc;
   }, {});
@@ -197,7 +198,7 @@ function buildRandomExam(allQuestions, count = 20) {
     }
   }
   if (picked.length < count) {
-    for (const q of shuffleItems(allQuestions)) {
+    for (const q of shuffleItems(source)) {
       if (picked.length >= count) break;
       if (!pickedIds.has(q.id)) {
         picked.push(q);
@@ -206,6 +207,11 @@ function buildRandomExam(allQuestions, count = 20) {
     }
   }
   return shuffleItems(picked).slice(0, count);
+}
+function randomExamMessage(items, type = '') {
+  const label = type ? (TYPE_LABELS[type] || type) : '전체 유형';
+  if (!items.length) return `${label} 랜덤 모의고사에 사용할 문제가 없습니다.`;
+  return `${label} 랜덤 모의고사 ${items.length}문항을 생성했습니다. 유형 구성: ${typeSummary(items)}`;
 }
 function typeSummary(items) {
   const counts = items.reduce((acc, q) => {
@@ -340,22 +346,28 @@ function Dashboard({ user, accessToken, onLogout }) {
   async function changeType(type) {
     setSelectedType(type);
     setExamSource('set');
-    try { await load(type, selectedSet); }
+    try {
+      if (selectedSet === 'random-20') {
+        await startRandomExam(type);
+        return;
+      }
+      await load(type, selectedSet);
+    }
     catch (e) { setResult({ correct: false, feedback: '유형 조회 오류: ' + e.message }); }
   }
-  async function startRandomExam() {
+  async function startRandomExam(type = selectedType) {
     try {
       const data = await api('/questions?limit=200', {}, accessToken);
       const pool = data.questions || [];
-      const picked = buildRandomExam(pool, 20);
+      const picked = buildRandomExam(pool, 20, type);
       setQuestions(picked);
       setCurrent(picked[0] || null);
       setExamAnswers({});
       setExamResults(null);
       setExamSource('random');
       setSelectedSet('random-20');
-      setSelectedType('');
-      setExamMsg(`랜덤 모의고사 20문항을 생성했습니다. 유형 구성: ${typeSummary(picked)}`);
+      setSelectedType(type);
+      setExamMsg(randomExamMessage(picked, type));
     } catch (e) {
       setExamMsg('랜덤 모의고사 생성 오류: ' + e.message);
     }
