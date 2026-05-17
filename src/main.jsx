@@ -18,15 +18,20 @@ function saveSessionToken(token = '') {
 
 async function api(path, options = {}, token = '') {
   if (!API_BASE) throw new Error('API 주소가 설정되지 않았습니다.');
-  const res = await fetch(API_BASE + path, {
-    credentials: 'include',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {})
-    }
-  });
+  let res;
+  try {
+    res = await fetch(API_BASE + path, {
+      credentials: 'include',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {})
+      }
+    });
+  } catch (err) {
+    throw new Error('API 서버에 연결하지 못했습니다. 네트워크 또는 CORS 설정을 확인해주세요.');
+  }
   const text = await res.text();
   let data;
   try { data = text ? JSON.parse(text) : {}; } catch { data = { error: text || `HTTP ${res.status}` }; }
@@ -142,12 +147,12 @@ function Auth({ onLogin }) {
     <form onSubmit={submit}>
       <label>아이디 또는 이메일</label>
       <div className="username-row">
-        <input value={username} onChange={e => setUsername(e.target.value)} placeholder="study-id" />
+        <input value={username} onChange={e => setUsername(e.target.value)} placeholder="study-id" autoComplete="username" required />
         {mode === 'register' && usernameStatus && <span className={`username-status ${usernameStatus.tone}`}>{usernameStatus.text}</span>}
       </div>
-      {mode === 'register' && <><label>닉네임</label><div className="username-row"><input value={nickname} onChange={e => setNickname(e.target.value)} />{nicknameStatus && <span className={`username-status ${nicknameStatus.tone}`}>{nicknameStatus.text}</span>}</div></>}
+      {mode === 'register' && <><label>닉네임</label><div className="username-row"><input value={nickname} onChange={e => setNickname(e.target.value)} autoComplete="nickname" required />{nicknameStatus && <span className={`username-status ${nicknameStatus.tone}`}>{nicknameStatus.text}</span>}</div></>}
       <label>비밀번호</label>
-      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" />
+      <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="8자 이상" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} required minLength={mode === 'register' ? 8 : 1} />
       <button className="primary">{mode === 'register' ? '완료' : '로그인'}</button>
     </form>
     {mode === 'register'
@@ -180,7 +185,12 @@ const QUESTION_TYPES = [
 const TYPE_LABELS = Object.fromEntries(QUESTION_TYPES.map(t => [t.value, t.label]));
 
 function shuffleItems(items) {
-  return [...items].sort(() => Math.random() - 0.5);
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
 }
 function buildRandomExam(allQuestions, count = 20, type = '') {
   const source = type ? allQuestions.filter(q => q.type === type) : allQuestions;
